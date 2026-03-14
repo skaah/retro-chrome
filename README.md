@@ -2,9 +2,9 @@
 
 Extension Chrome pour extraire automatiquement les données de **DofusBook Retro**.
 
-## ✨ Nouveautés v1.1.0 - Mode Auto !
+## ✨ Nouveautés v1.2.0 - Bulk Detail Scraper !
 
-🤖 **Mode Auto** : Scrape automatiquement chaque page DofusBook visitée, sans clic !
+🚀 **Bulk Detail Scraper** : Scrape automatiquement tous les items d'une page liste en ouvrant chaque détail !
 
 ## 📦 Installation
 
@@ -17,6 +17,28 @@ Extension Chrome pour extraire automatiquement les données de **DofusBook Retro
 L'icône 🔥 apparaît dans la barre Chrome.
 
 ## 🚀 Utilisation
+
+### 🆕 Mode Bulk Detail Scraper (NOUVEAU !)
+
+1. Allez sur une **page liste** (ex: `/encyclopedie/items`, `/encyclopedie/armes`, `/encyclopedie/panoplies`)
+2. Ouvrez l'extension
+3. Cliquez sur **"🚀 Scraper tout en détail"**
+4. L'extension va :
+   - 🔍 Extraire tous les liens des items de la page
+   - 🆕 Ouvrir chaque item dans un nouvel onglet
+   - 📥 Scraper automatiquement les détails (stats, recettes, etc.)
+   - 💾 Télécharger le fichier JSON
+   - ❌ Fermer l'onglet
+   - 🔄 Passer au suivant
+5. Une barre de progression s'affiche en haut de l'écran
+6. Tous les items sont scrapés automatiquement !
+
+**Avantages :**
+- ✅ Récupère les **stats complètes** (pas juste le nom)
+- ✅ Récupère les **recettes** de craft
+- ✅ Récupère les **conditions** d'utilisation
+- ✅ Fonctionne sur les **items, armes ET panoplies**
+- ✅ Anti-doublon intégré
 
 ### Mode Manuel (Classique)
 
@@ -119,6 +141,13 @@ L'icône 🔥 apparaît dans la barre Chrome.
 - Les pages se scrapent 3 secondes après chargement complet
 
 ## 📝 Changelog
+
+### v1.2.0 (2026-03-15)
+- 🚀 **Bulk Detail Scraper** : Scrape automatiquement tous les items d'une page liste
+- 🆕 Ouvre chaque item en détail automatiquement
+- 📊 Barre de progression en temps réel
+- ✅ Extraction complète (stats, recettes, conditions)
+- 🎯 Fonctionne sur items, armes et panoplies
 
 ### v1.1.0 (2026-03-15)
 - ✨ **Mode Auto** : Scraping automatique

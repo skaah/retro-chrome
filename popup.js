@@ -23,6 +23,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('exportBtn').addEventListener('click', exportAllData);
   document.getElementById('clearBtn').addEventListener('click', clearAllData);
   
+  // Bouton bulk scrape
+  const bulkBtn = document.getElementById('bulkScrapeBtn');
+  if (bulkBtn) {
+    bulkBtn.addEventListener('click', startBulkScrape);
+  }
+  
   // Charger l'état du mode auto
   loadAutoModeState();
 });
@@ -44,26 +50,44 @@ async function loadData() {
 function checkDofusBookPage() {
   const statusEl = document.getElementById('status');
   const statusText = document.getElementById('statusText');
+  const bulkBtn = document.getElementById('bulkScrapeBtn');
   
   if (!currentTab?.url?.includes('retro.dofusbook.net')) {
     statusEl.className = 'status error';
     statusText.textContent = '⚠️ Allez sur retro.dofusbook.net';
     document.getElementById('scrapeBtn').disabled = true;
+    if (bulkBtn) bulkBtn.style.display = 'none';
     return false;
   }
   
-  const isItemPage = currentTab.url.includes('/items/');
-  const isSetPage = currentTab.url.includes('/panoplies/');
+  const isItemPage = currentTab.url.includes('/items/') && currentTab.url.match(/\/items\/[^/]+$/);
+  const isWeaponPage = currentTab.url.includes('/armes/') && currentTab.url.match(/\/armes\/[^/]+$/);
+  const isSetPage = currentTab.url.includes('/panoplies/') && currentTab.url.match(/\/panoplies\/[^/]+$/);
   
-  if (isItemPage || isSetPage) {
+  const isListPage = (currentTab.url.includes('/items') && !isItemPage) ||
+                     (currentTab.url.includes('/armes') && !isWeaponPage) ||
+                     (currentTab.url.includes('/panoplies') && !isSetPage);
+  
+  if (isItemPage || isWeaponPage || isSetPage) {
     statusEl.className = 'status success';
-    statusText.textContent = isItemPage ? '✅ Page item détectée' : '✅ Page panoplie détectée';
+    statusText.textContent = '✅ Page détail détectée';
     document.getElementById('scrapeBtn').disabled = false;
+    if (bulkBtn) bulkBtn.style.display = 'none';
+    return true;
+  } else if (isListPage) {
+    statusEl.className = 'status success';
+    statusText.textContent = '✅ Page liste détectée';
+    document.getElementById('scrapeBtn').disabled = true;
+    if (bulkBtn) {
+      bulkBtn.style.display = 'flex';
+      bulkBtn.textContent = '🚀 Scraper tout en détail';
+    }
     return true;
   } else {
     statusEl.className = 'status warning';
-    statusText.textContent = 'ℹ️ Naviguez vers un item ou panoplie';
+    statusText.textContent = 'ℹ️ Naviguez vers une page';
     document.getElementById('scrapeBtn').disabled = true;
+    if (bulkBtn) bulkBtn.style.display = 'none';
     return false;
   }
 }
@@ -134,6 +158,28 @@ async function scrapeCurrentPage() {
   } finally {
     btn.disabled = false;
     btn.textContent = '📥 Scraper cette page';
+  }
+}
+
+// Démarrer le bulk scraping
+async function startBulkScrape() {
+  const btn = document.getElementById('bulkScrapeBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Préparation...';
+  
+  try {
+    // Envoyer le message au content script
+    await chrome.tabs.sendMessage(currentTab.id, { action: 'startBulkScrape' });
+    
+    showNotification('🚀 Bulk Scraper', 'Démarrage du scraping en masse...');
+    
+    // Fermer le popup
+    window.close();
+  } catch (err) {
+    console.error('Erreur bulk scrape:', err);
+    showNotification('❌ Erreur', 'Impossible de démarrer le bulk scrape');
+    btn.disabled = false;
+    btn.textContent = '🚀 Scraper tout en détail';
   }
 }
 

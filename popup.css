@@ -194,6 +194,16 @@ input:checked + .slider:before {
   box-shadow: 0 4px 12px rgba(233, 69, 96, 0.4);
 }
 
+.btn-success {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(74, 222, 128, 0.4);
+}
+
 .btn-secondary {
   background: rgba(255, 255, 255, 0.1);
   color: white;
