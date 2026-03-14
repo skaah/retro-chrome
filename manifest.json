@@ -1,16 +1,21 @@
 {
   "manifest_version": 3,
   "name": "DofusBook Retro Scraper",
-  "version": "1.0.0",
-  "description": "Extracteur de données DofusBook Retro - Exporte items, stats et images vers JSON",
+  "version": "1.1.0",
+  "description": "Extracteur de données DofusBook Retro - Mode Auto disponible !",
   "permissions": [
     "activeTab",
     "storage",
-    "downloads"
+    "downloads",
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
     "https://retro.dofusbook.net/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -31,5 +36,11 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js"],
+      "matches": ["https://retro.dofusbook.net/*"]
+    }
+  ]
 }

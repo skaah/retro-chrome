@@ -10,52 +10,88 @@
     <div class="container">
         <header>
             <h1>🔥 DofusBook Scraper</h1>
-            <p class="subtitle">Extraction de données DofusBook Retro</p>
+            <p class="subtitle">Mode Auto disponible !</p>
         </header>
         
-        <div class="status" id="status">
-            <span class="dot"></span>
-            <span>En attente...</span>
+        <!-- Mode Auto Toggle -->
+        <div class="auto-mode-section">
+            <div class="auto-mode-header">
+                <span class="auto-mode-label">🤖 Mode Auto</span>
+                <label class="switch">
+                    <input type="checkbox" id="autoModeToggle">
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <p class="auto-mode-desc" id="autoModeDesc">
+                Scrape automatiquement chaque page DofusBook visitée
+            </p>
         </div>
         
+        <!-- Status -->
+        <div class="status" id="status">
+            <span class="dot"></span>
+            <span id="statusText">En attente...</span>
+        </div>
+        
+        <!-- Actions -->
         <div class="actions">
             <button id="scrapeBtn" class="btn btn-primary">
                 📥 Scraper cette page
             </button>
-            <button id="autoBtn" class="btn btn-secondary">
-                🔄 Mode Auto
+            <button id="exportBtn" class="btn btn-secondary">
+                📤 Exporter tout
+            </button>
+            <button id="clearBtn" class="btn btn-danger">
+                🗑️ Vider le cache
             </button>
         </div>
         
-        <div class="stats" id="stats" style="display: none;">
-            <h3>📊 Statistiques</h3>
+        <!-- Stats -->
+        <div class="stats" id="stats">
+            <h3>📊 Données collectées</h3>
             <div class="stat-row">
-                <span>Items extraits:</span>
+                <span>Items:</span>
                 <span id="itemCount">0</span>
             </div>
             <div class="stat-row">
                 <span>Panoplies:</span>
                 <span id="setCount">0</span>
             </div>
-            <div class="stat-row">
-                <span>Total exports:</span>
+            <div class="stat-row total">
+                <span>Total:</span>
                 <span id="totalCount">0</span>
             </div>
         </div>
         
+        <!-- Liste récente -->
+        <div class="recent-items" id="recentItems" style="display: none;">
+            <h3>🕐 Récemment scrapés</h3>
+            <ul id="recentList"></ul>
+        </div>
+        
+        <!-- Info -->
         <div class="info">
-            <h4>📖 Instructions</h4>
-            <ol>
-                <li>Allez sur <strong>retro.dofusbook.net</strong></li>
-                <li>Naviguez vers un item ou panoplie</li>
-                <li>Cliquez sur <strong>"Scraper cette page"</strong></li>
-                <li>Les données se téléchargent automatiquement</li>
-            </ol>
+            <h4>📖 Comment utiliser</h4>
+            <div class="info-section">
+                <strong>Mode Manuel:</strong>
+                <ol>
+                    <li>Allez sur une page item/panoplie</li>
+                    <li>Cliquez "Scraper cette page"</li>
+                </ol>
+            </div>
+            <div class="info-section">
+                <strong>Mode Auto:</strong>
+                <ol>
+                    <li>Activez le toggle "Mode Auto"</li>
+                    <li>Naviguez sur DofusBook</li>
+                    <li>Les pages se scrapent automatiquement !</li>
+                    <li>Cliquez "Exporter tout" à la fin</li>
+                </ol>
+            </div>
         </div>
         
         <footer>
-            <a href="#" id="openOptions">⚙️ Options</a>
-            <span class="version">v1.0.0</span>
+            <span class="version">v1.1.0 - Mode Auto ✨</span>
         </footer>
     </div>
     

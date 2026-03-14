@@ -1,25 +1,72 @@
-/* Styles injectés sur les pages DofusBook */
+/**
+ * Content Script Styles - Floating Button & Notifications
+ */
 
-#dofusbook-scraper-btn {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-    font-size: 14px !important;
-    letter-spacing: 0.5px !important;
-    user-select: none !important;
+#dofusbook-scraper-float {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  width: 50px !important;
+  height: 50px !important;
+  background: linear-gradient(135deg, #e94560 0%, #c73e54 100%) !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 24px !important;
+  cursor: pointer !important;
+  z-index: 999999 !important;
+  box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4) !important;
+  transition: all 0.3s ease !important;
+  user-select: none !important;
 }
 
-#dofusbook-scraper-btn:hover {
-    transform: scale(1.05) !important;
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4) !important;
+#dofusbook-scraper-float:hover {
+  transform: scale(1.1) !important;
+  box-shadow: 0 6px 20px rgba(233, 69, 96, 0.6) !important;
 }
 
-/* Animation de notification */
-@keyframes slideIn {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
+#dofusbook-scraper-float.auto-mode {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%) !important;
+  box-shadow: 0 4px 15px rgba(74, 222, 128, 0.4) !important;
+  animation: pulse-green 2s infinite !important;
+}
+
+@keyframes pulse-green {
+  0%, 100% {
+    box-shadow: 0 4px 15px rgba(74, 222, 128, 0.4);
+  }
+  50% {
+    box-shadow: 0 4px 25px rgba(74, 222, 128, 0.8);
+  }
+}
+
+#dofusbook-scraper-float .tooltip {
+  position: absolute !important;
+  right: 60px !important;
+  background: rgba(0, 0, 0, 0.9) !important;
+  color: white !important;
+  padding: 6px 12px !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  transition: all 0.2s !important;
+  pointer-events: none !important;
+}
+
+#dofusbook-scraper-float:hover .tooltip {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Notification temporaire sur le bouton */
+#dofusbook-scraper-float.notify {
+  animation: bounce 0.5s ease !important;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
 }
