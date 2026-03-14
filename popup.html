@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DofusBook Scraper</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔥 DofusBook Scraper</h1>
+            <p class="subtitle">Extraction de données DofusBook Retro</p>
+        </header>
+        
+        <div class="status" id="status">
+            <span class="dot"></span>
+            <span>En attente...</span>
+        </div>
+        
+        <div class="actions">
+            <button id="scrapeBtn" class="btn btn-primary">
+                📥 Scraper cette page
+            </button>
+            <button id="autoBtn" class="btn btn-secondary">
+                🔄 Mode Auto
+            </button>
+        </div>
+        
+        <div class="stats" id="stats" style="display: none;">
+            <h3>📊 Statistiques</h3>
+            <div class="stat-row">
+                <span>Items extraits:</span>
+                <span id="itemCount">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Panoplies:</span>
+                <span id="setCount">0</span>
+            </div>
+            <div class="stat-row">
+                <span>Total exports:</span>
+                <span id="totalCount">0</span>
+            </div>
+        </div>
+        
+        <div class="info">
+            <h4>📖 Instructions</h4>
+            <ol>
+                <li>Allez sur <strong>retro.dofusbook.net</strong></li>
+                <li>Naviguez vers un item ou panoplie</li>
+                <li>Cliquez sur <strong>"Scraper cette page"</strong></li>
+                <li>Les données se téléchargent automatiquement</li>
+            </ol>
+        </div>
+        
+        <footer>
+            <a href="#" id="openOptions">⚙️ Options</a>
+            <span class="version">v1.0.0</span>
+        </footer>
+    </div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>
