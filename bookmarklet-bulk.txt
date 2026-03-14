@@ -1,0 +1,1 @@
+javascript:(function(){const s=document.createElement('script');s.src='https://raw.githubusercontent.com/skaah/retro-chrome/master/bulk-scraper-console.js';document.head.appendChild(s);})();
