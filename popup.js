@@ -165,19 +165,33 @@ async function scrapeCurrentPage() {
 async function startBulkScrape() {
   const btn = document.getElementById('bulkScrapeBtn');
   btn.disabled = true;
-  btn.textContent = '⏳ Préparation...';
+  btn.textContent = '⏳ Injection...';
   
   try {
-    // Envoyer le message au content script
-    await chrome.tabs.sendMessage(currentTab.id, { action: 'startBulkScrape' });
+    // Injecter le script bulk-scraper directement dans la page
+    await chrome.scripting.executeScript({
+      target: { tabId: currentTab.id },
+      files: ['bulk-scraper.js']
+    });
     
-    showNotification('🚀 Bulk Scraper', 'Démarrage du scraping en masse...');
+    // Attendre un peu que le script s'initialise
+    setTimeout(async () => {
+      try {
+        // Envoyer le message de démarrage
+        await chrome.tabs.sendMessage(currentTab.id, { action: 'startBulkScrape' });
+        showNotification('🚀 Bulk Scraper', 'Démarrage...');
+        window.close();
+      } catch (err) {
+        console.error('Erreur démarrage:', err);
+        showNotification('❌ Erreur', 'Rechargez la page et réessayez');
+        btn.disabled = false;
+        btn.textContent = '🚀 Scraper tout en détail';
+      }
+    }, 500);
     
-    // Fermer le popup
-    window.close();
   } catch (err) {
-    console.error('Erreur bulk scrape:', err);
-    showNotification('❌ Erreur', 'Impossible de démarrer le bulk scrape');
+    console.error('Erreur injection:', err);
+    showNotification('❌ Erreur', 'Impossible d\'injecter le script');
     btn.disabled = false;
     btn.textContent = '🚀 Scraper tout en détail';
   }

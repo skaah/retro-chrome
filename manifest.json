@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "DofusBook Retro Scraper",
-  "version": "1.2.0",
-  "description": "Extracteur de données DofusBook Retro - Mode Auto + Bulk Detail Scraper !",
+  "version": "1.2.1",
+  "description": "Extracteur de données DofusBook Retro - Bulk Detail Scraper corrigé !",
   "permissions": [
     "activeTab",
     "storage",

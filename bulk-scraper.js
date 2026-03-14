@@ -1,42 +1,45 @@
 /**
- * Bulk Detail Scraper - Content Script
+ * Bulk Detail Scraper - Version Robust
  * Ouvre automatiquement les pages détaillées et scrape
  */
 
 (function() {
   'use strict';
 
-  // Éviter les doubles injections
-  if (window.bulkScraperInjected) return;
-  window.bulkScraperInjected = true;
+  console.log('🔥 Bulk Detail Scraper v2.0 injecté');
 
-  console.log('🔥 Bulk Detail Scraper injecté');
-
+  // État global
   let isRunning = false;
   let itemsToScrape = [];
   let currentIndex = 0;
   let scrapedCount = 0;
   let failedItems = [];
+  let currentWindow = null;
 
   // Configuration
   const CONFIG = {
-    DELAY_BETWEEN_PAGES: 3000,  // 3 secondes entre chaque page
-    DELAY_AFTER_LOAD: 2000,     // 2 secondes après chargement
-    MAX_RETRIES: 2,
-    AUTO_CLOSE: true            // Ferme l'onglet après scraping
+    DELAY_BETWEEN_PAGES: 4000,  // 4 secondes entre chaque page
+    DELAY_AFTER_LOAD: 2500,     // 2.5 secondes après chargement
+    MAX_RETRIES: 2
   };
 
-  // Écouter les commandes du popup/background
+  // Écouter les commandes
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('📨 Message reçu:', message.action);
+    
     switch (message.action) {
       case 'startBulkScrape':
-        startBulkScraping(message.items);
-        sendResponse({ started: true });
+        if (!isRunning) {
+          startBulkScraping();
+          sendResponse({ success: true, message: 'Démarré' });
+        } else {
+          sendResponse({ success: false, message: 'Déjà en cours' });
+        }
         break;
         
       case 'stopBulkScrape':
         stopBulkScraping();
-        sendResponse({ stopped: true });
+        sendResponse({ success: true });
         break;
         
       case 'getBulkStatus':
@@ -44,16 +47,12 @@
           isRunning: isRunning,
           current: currentIndex,
           total: itemsToScrape.length,
-          scraped: scrapedCount,
-          failed: failedItems
+          scraped: scrapedCount
         });
         break;
         
-      case 'pageScraped':
-        // Message reçu d'un onglet enfant
-        handleChildScraped(message.data);
-        sendResponse({ received: true });
-        break;
+      default:
+        sendResponse({ success: false, message: 'Action inconnue' });
     }
     return true;
   });
@@ -61,93 +60,97 @@
   // Vérifier si on est sur une page de liste
   function isListPage() {
     const url = window.location.href;
-    return url.includes('/items') && !url.match(/\/items\/[^/]+$/) ||
-           url.includes('/armes') && !url.match(/\/armes\/[^/]+$/) ||
-           url.includes('/panoplies') && !url.match(/\/panoplies\/[^/]+$/);
+    const isItemsList = url.includes('/items') && !url.match(/\/items\/[^/]+$/);
+    const isWeaponsList = url.includes('/armes') && !url.match(/\/armes\/[^/]+$/);
+    const isSetsList = url.includes('/panoplies') && !url.match(/\/panoplies\/[^/]+$/);
+    
+    return isItemsList || isWeaponsList || isSetsList;
   }
 
-  // Extraire les liens des items de la page actuelle
+  // Extraire les liens des items
   function extractItemsFromPage() {
     const items = [];
     const url = window.location.href;
     
-    // Détecter le type de page
-    let baseUrl = '';
-    if (url.includes('/panoplies')) {
-      baseUrl = 'https://retro.dofusbook.net/fr/encyclopedie/panoplies/';
-    } else if (url.includes('/armes')) {
-      baseUrl = 'https://retro.dofusbook.net/fr/encyclopedie/armes/';
-    } else {
-      baseUrl = 'https://retro.dofusbook.net/fr/encyclopedie/items/';
-    }
+    console.log('🔍 Extraction des items...');
     
-    // Chercher tous les liens vers des items
-    const links = document.querySelectorAll('a[href*="/encyclopedie/"]');
+    // Méthode 1: Chercher les liens avec href contenant /items/, /armes/, /panoplies/
+    const allLinks = document.querySelectorAll('a[href*="/encyclopedie/"]');
+    console.log(`🔗 ${allLinks.length} liens trouvés`);
     
-    links.forEach(link => {
+    allLinks.forEach(link => {
       const href = link.getAttribute('href');
+      if (!href) return;
+      
+      // Matcher les URLs d'items/armes/panoplies
       const match = href.match(/\/encyclopedie\/(items|armes|panoplies)\/([^/]+)/);
       
-      if (match && match[2]) {
-        const itemName = match[2];
-        const displayName = link.textContent.trim() || itemName;
+      if (match && match[2] && match[2] !== 'items' && match[2] !== 'armes' && match[2] !== 'panoplies') {
+        const itemName = decodeURIComponent(match[2]).replace(/-/g, ' ');
+        const fullUrl = href.startsWith('http') ? href : `https://retro.dofusbook.net${href}`;
         
         // Éviter les doublons
-        if (!items.find(i => i.url === href)) {
+        if (!items.find(i => i.url === fullUrl)) {
           items.push({
-            name: displayName,
-            url: href.startsWith('http') ? href : `https://retro.dofusbook.net${href}`,
-            slug: itemName
+            name: itemName,
+            url: fullUrl,
+            slug: match[2]
           });
         }
       }
     });
     
-    // Alternative: chercher dans les data attributes ou les éléments avec les noms
+    // Méthode 2: Chercher les éléments avec data-item-id ou classes spécifiques
     if (items.length === 0) {
-      // Essayer de trouver les items dans les éléments de liste
-      const itemElements = document.querySelectorAll('[class*="item"], [class*="card"], .encyclopedia-item');
+      console.log('🔍 Méthode 2: Chercher dans les cartes...');
       
-      itemElements.forEach(el => {
-        const nameEl = el.querySelector('h3, h4, .name, [class*="title"]');
-        const linkEl = el.querySelector('a');
-        
-        if (nameEl && linkEl) {
-          const href = linkEl.getAttribute('href');
+      const cards = document.querySelectorAll('[class*="item"], [class*="card"], .encyclopedia-entry, [data-item-id]');
+      
+      cards.forEach(card => {
+        const link = card.querySelector('a') || card.closest('a');
+        if (link) {
+          const href = link.getAttribute('href');
           if (href) {
-            items.push({
-              name: nameEl.textContent.trim(),
-              url: href.startsWith('http') ? href : `https://retro.dofusbook.net${href}`,
-              slug: href.split('/').pop()
-            });
+            const match = href.match(/\/encyclopedie\/(items|armes|panoplies)\/([^/]+)/);
+            if (match && match[2]) {
+              const nameEl = card.querySelector('h3, h4, .name, [class*="title"]') || link;
+              const fullUrl = href.startsWith('http') ? href : `https://retro.dofusbook.net${href}`;
+              
+              if (!items.find(i => i.url === fullUrl)) {
+                items.push({
+                  name: nameEl.textContent.trim() || match[2],
+                  url: fullUrl,
+                  slug: match[2]
+                });
+              }
+            }
           }
         }
       });
     }
     
-    console.log(`🔍 ${items.length} items trouvés sur la page`);
+    console.log(`✅ ${items.length} items extraits`);
     return items;
   }
 
-  // Démarrer le scraping en masse
-  async function startBulkScraping(providedItems) {
+  // Démarrer le scraping
+  async function startBulkScraping() {
     if (isRunning) {
       console.log('⏳ Déjà en cours');
       return;
     }
     
-    isRunning = true;
-    
-    // Utiliser les items fournis ou extraire de la page
-    if (providedItems && providedItems.length > 0) {
-      itemsToScrape = providedItems;
-    } else {
-      itemsToScrape = extractItemsFromPage();
+    // Vérifier qu'on est sur une page liste
+    if (!isListPage()) {
+      alert('❌ Vous devez être sur une page liste (/items, /armes, ou /panoplies)');
+      return;
     }
     
+    isRunning = true;
+    itemsToScrape = extractItemsFromPage();
+    
     if (itemsToScrape.length === 0) {
-      console.error('❌ Aucun item trouvé');
-      showNotification('❌ Erreur', 'Aucun item trouvé sur cette page');
+      alert('❌ Aucun item trouvé sur cette page');
       isRunning = false;
       return;
     }
@@ -156,21 +159,24 @@
     scrapedCount = 0;
     failedItems = [];
     
-    console.log(`🚀 Démarrage du bulk scraping: ${itemsToScrape.length} items`);
-    showNotification('🚀 Bulk Scraper', `${itemsToScrape.length} items à scraper`);
+    console.log(`🚀 Démarrage bulk scraping: ${itemsToScrape.length} items`);
     
-    // Créer l'interface de suivi
+    // Créer l'interface
     createProgressUI();
     
-    // Démarrer le processus
+    // Démarrer
     processNextItem();
   }
 
-  // Arrêter le scraping
+  // Arrêter
   function stopBulkScraping() {
     isRunning = false;
-    console.log('⏹️ Scraping arrêté');
-    updateProgressUI();
+    console.log('⏹️ Arrêt demandé');
+    updateProgressUI('⏹️ Arrêté par l\'utilisateur');
+    
+    if (currentWindow && !currentWindow.closed) {
+      currentWindow.close();
+    }
   }
 
   // Traiter l'item suivant
@@ -178,267 +184,266 @@
     if (!isRunning) return;
     
     if (currentIndex >= itemsToScrape.length) {
-      // Terminé
       finishBulkScraping();
       return;
     }
     
     const item = itemsToScrape[currentIndex];
-    updateProgressUI();
+    updateProgressUI(`🔄 Ouverture: ${item.name}`);
     
     try {
-      console.log(`📄 [${currentIndex + 1}/${itemsToScrape.length}] Ouverture: ${item.name}`);
-      
       // Ouvrir dans un nouvel onglet
-      const newWindow = window.open(item.url, `_dofusbook_${Date.now()}`);
+      currentWindow = window.open(item.url, `_dofusbook_bulk_${Date.now()}`);
       
-      if (!newWindow) {
-        throw new Error('Popup bloqué');
+      if (!currentWindow) {
+        throw new Error('Popup bloqué - Vérifiez les paramètres de Chrome');
       }
       
-      // Attendre que la page charge et scrape
-      await waitAndScrape(newWindow, item);
+      // Attendre et scraper
+      await waitAndScrape(item);
       
     } catch (err) {
       console.error(`❌ Erreur sur ${item.name}:`, err);
       failedItems.push({ item: item, error: err.message });
-    }
-    
-    // Passer au suivant
-    currentIndex++;
-    
-    // Délai avant le prochain
-    if (isRunning && currentIndex < itemsToScrape.length) {
-      setTimeout(processNextItem, CONFIG.DELAY_BETWEEN_PAGES);
-    } else if (currentIndex >= itemsToScrape.length) {
-      finishBulkScraping();
+      
+      // Continuer malgré l'erreur
+      currentIndex++;
+      if (isRunning) {
+        setTimeout(processNextItem, 1000);
+      }
     }
   }
 
-  // Attendre et scraper une page
-  async function waitAndScrape(newWindow, item) {
+  // Attendre et scraper
+  async function waitAndScrape(item) {
     return new Promise((resolve, reject) => {
-      let attempts = 0;
+      let checkCount = 0;
+      const maxChecks = 50; // 10 secondes max
       
       const checkInterval = setInterval(() => {
-        attempts++;
+        checkCount++;
         
         try {
+          // Vérifier si la fenêtre est fermée
+          if (currentWindow.closed) {
+            clearInterval(checkInterval);
+            reject(new Error('Fenêtre fermée'));
+            return;
+          }
+          
           // Vérifier si la page est chargée
-          if (newWindow.document.readyState === 'complete') {
+          if (currentWindow.document && currentWindow.document.readyState === 'complete') {
             clearInterval(checkInterval);
             
-            // Attendre un peu plus pour le contenu dynamique
+            updateProgressUI(`⏳ Scraping: ${item.name}`);
+            
+            // Attendre un peu pour le contenu dynamique
             setTimeout(() => {
               try {
-                // Injecter le script de scraping dans le nouvel onglet
-                const scrapedData = scrapeDetailPage(newWindow.document, item.url);
-                
-                if (scrapedData) {
-                  // Sauvegarder
-                  saveScrapedData(scrapedData);
-                  scrapedCount++;
-                  
-                  // Fermer l'onglet si activé
-                  if (CONFIG.AUTO_CLOSE) {
-                    newWindow.close();
-                  }
-                  
-                  resolve();
-                } else {
-                  reject(new Error('Scraping a échoué'));
-                }
+                scrapeInWindow(item);
+                resolve();
               } catch (err) {
                 reject(err);
               }
             }, CONFIG.DELAY_AFTER_LOAD);
           }
         } catch (err) {
-          // La fenêtre a peut-être été fermée ou cross-origin
+          // Cross-origin ou autre erreur
           clearInterval(checkInterval);
           reject(err);
         }
         
-        // Timeout après 10 secondes
-        if (attempts > 50) {
+        if (checkCount > maxChecks) {
           clearInterval(checkInterval);
-          reject(new Error('Timeout de chargement'));
+          reject(new Error('Timeout'));
         }
       }, 200);
     });
   }
 
-  // Scraper une page détaillée
-  function scrapeDetailPage(doc, url) {
+  // Scraper dans la fenêtre ouverte
+  function scrapeInWindow(item) {
+    const doc = currentWindow.document;
+    const url = item.url;
+    
+    // Détecter le type
     const isPanoplie = url.includes('/panoplies/');
     
+    let data;
     if (isPanoplie) {
-      return scrapePanoplieDetail(doc, url);
+      data = scrapePanoplieDetail(doc, url, item.name);
     } else {
-      return scrapeItemDetail(doc, url);
+      data = scrapeItemDetail(doc, url, item.name);
+    }
+    
+    if (data) {
+      // Sauvegarder
+      saveScrapedData(data);
+      scrapedCount++;
+      
+      // Fermer la fenêtre
+      currentWindow.close();
+      currentWindow = null;
+      
+      // Passer au suivant
+      currentIndex++;
+      if (isRunning) {
+        setTimeout(processNextItem, CONFIG.DELAY_BETWEEN_PAGES);
+      }
+    } else {
+      throw new Error('Aucune donnée extraite');
     }
   }
 
-  // Scraper détail d'un item
-  function scrapeItemDetail(doc, url) {
+  // Scraper détail item
+  function scrapeItemDetail(doc, url, fallbackName) {
     const data = {
       type: 'item',
       url: url,
       scraped_at: new Date().toISOString()
     };
     
-    // Nom
-    const nameEl = doc.querySelector('h1, .item-name, [item-name]');
-    data.name = nameEl ? nameEl.textContent.trim() : 'Unknown';
-    
-    // Niveau
-    const levelEl = doc.querySelector('.item-level, [item-level]');
-    if (levelEl) {
-      const match = levelEl.textContent.match(/(\d+)/);
-      if (match) data.level = parseInt(match[1]);
-    }
-    
-    // Type
-    const typeEl = doc.querySelector('.item-type, [item-type]');
-    data.item_type = typeEl ? typeEl.textContent.trim() : 'Inconnu';
-    
-    // Image
-    const imgEl = doc.querySelector('.item-image img, [item-image] img');
-    if (imgEl) data.image_url = imgEl.src;
-    
-    // Description
-    const descEl = doc.querySelector('.item-description, [item-description]');
-    if (descEl) data.description = descEl.textContent.trim();
-    
-    // Stats
-    data.stats = {};
-    const statsEls = doc.querySelectorAll('.stat, [class*="stat"]');
-    statsEls.forEach(el => {
-      const text = el.textContent;
-      const match = text.match(/([^:]+):\s*(.+)/);
-      if (match) {
-        data.stats[normalizeStatName(match[1])] = match[2].trim();
+    try {
+      // Nom
+      const nameEl = doc.querySelector('h1');
+      data.name = nameEl ? nameEl.textContent.trim() : fallbackName;
+      
+      // Chercher dans toute la page pour le niveau
+      const bodyText = doc.body.innerText;
+      const levelMatch = bodyText.match(/niveau\s+(\d+)/i);
+      if (levelMatch) data.level = parseInt(levelMatch[1]);
+      
+      // Type (chercher dans le texte)
+      const typeMatch = bodyText.match(/(Anneau|Amulette|Chapeau|Cape|Ceinture|Bottes|Arme|Epée|Arc|Baguette)/i);
+      if (typeMatch) data.item_type = typeMatch[1];
+      
+      // Image
+      const imgEl = doc.querySelector('img[src*="items"], img[src*="armes"]');
+      if (imgEl) data.image_url = imgEl.src;
+      
+      // Description
+      const descMatch = bodyText.match(/description[\s:]+([^\n]+)/i);
+      if (descMatch) data.description = descMatch[1].trim();
+      
+      // Stats - chercher tous les nombres avec labels
+      data.stats = {};
+      const statPatterns = [
+        /vitalit[eé][\s:]+(\d+)/i,
+        /sagesse[\s:]+(\d+)/i,
+        /force[\s:]+(\d+)/i,
+        /intelligence[\s:]+(\d+)/i,
+        /chance[\s:]+(\d+)/i,
+        /agilit[eé][\s:]+(\d+)/i,
+        /PA[\s:]+([+-]?\d+)/i,
+        /PM[\s:]+([+-]?\d+)/i,
+        /Port[eé]e[\s:]+(\d+)/i
+      ];
+      
+      statPatterns.forEach(pattern => {
+        const match = bodyText.match(pattern);
+        if (match) {
+          const statName = pattern.toString().match(/\/\^([a-zA-Z]+)/)[1].toLowerCase();
+          data.stats[statName] = parseInt(match[1]);
+        }
+      });
+      
+      // Recette - chercher les ingrédients
+      data.recipe = [];
+      const recipeSection = bodyText.match(/recette[\s\S]*?(?=panoplie|$)/i);
+      if (recipeSection) {
+        const ingredientMatches = recipeSection[0].matchAll(/(\d+)\s*x?\s*([^,\n]+)/g);
+        for (const match of ingredientMatches) {
+          if (match[1] && match[2]) {
+            data.recipe.push({
+              quantity: parseInt(match[1]),
+              name: match[2].trim()
+            });
+          }
+        }
       }
-    });
-    
-    // Conditions
-    const conditionsEl = doc.querySelector('.item-conditions, [item-conditions]');
-    if (conditionsEl) {
-      data.conditions = conditionsEl.textContent.trim();
+      
+      console.log('✅ Item scrapé:', data.name, 'Niveau:', data.level);
+      return data;
+      
+    } catch (err) {
+      console.error('Erreur scraping:', err);
+      return null;
     }
-    
-    // Recette
-    data.recipe = [];
-    const recipeEls = doc.querySelectorAll('.ingredient, .recipe-item');
-    recipeEls.forEach(el => {
-      const name = el.querySelector('.name, .ingredient-name')?.textContent?.trim();
-      const qty = el.querySelector('.quantity, .qty')?.textContent?.trim();
-      if (name) {
-        data.recipe.push({ name, quantity: parseInt(qty) || 1 });
-      }
-    });
-    
-    return data;
   }
 
-  // Scraper détail d'une panoplie
-  function scrapePanoplieDetail(doc, url) {
+  // Scraper détail panoplie
+  function scrapePanoplieDetail(doc, url, fallbackName) {
     const data = {
       type: 'panoplie',
       url: url,
       scraped_at: new Date().toISOString()
     };
     
-    // Nom
-    const nameEl = doc.querySelector('h1, .set-name, [set-name]');
-    data.name = nameEl ? nameEl.textContent.trim() : 'Unknown';
-    
-    // Niveau
-    const levelEl = doc.querySelector('.set-level, [set-level]');
-    if (levelEl) {
-      const match = levelEl.textContent.match(/(\d+)/);
-      if (match) data.level = parseInt(match[1]);
-    }
-    
-    // Pièces
-    data.pieces = [];
-    const pieceEls = doc.querySelectorAll('.piece, [piece], .set-piece');
-    pieceEls.forEach(el => {
-      const name = el.querySelector('.name, .piece-name')?.textContent?.trim();
-      const type = el.querySelector('.type, .piece-type')?.textContent?.trim();
-      if (name) {
-        data.pieces.push({ name, type: type || 'Inconnu' });
-      }
-    });
-    
-    // Bonus
-    data.bonuses = {};
-    const bonusEls = doc.querySelectorAll('.bonus, [bonus], .set-bonus');
-    bonusEls.forEach(el => {
-      const countMatch = el.textContent.match(/(\d+)\s*items?/i);
-      if (countMatch) {
-        const numItems = countMatch[1];
-        const bonuses = {};
-        
-        el.querySelectorAll('.bonus-stat').forEach(statEl => {
-          const text = statEl.textContent;
-          const match = text.match(/([^:]+):\s*(.+)/);
-          if (match) {
-            bonuses[normalizeStatName(match[1])] = match[2].trim();
+    try {
+      // Nom
+      const nameEl = doc.querySelector('h1');
+      data.name = nameEl ? nameEl.textContent.trim() : fallbackName;
+      
+      // Niveau
+      const bodyText = doc.body.innerText;
+      const levelMatch = bodyText.match(/niveau\s+(\d+)/i);
+      if (levelMatch) data.level = parseInt(levelMatch[1]);
+      
+      // Pièces - chercher tous les liens d'items
+      data.pieces = [];
+      const pieceLinks = doc.querySelectorAll('a[href*="/items/"]');
+      pieceLinks.forEach(link => {
+        const name = link.textContent.trim();
+        if (name && !data.pieces.find(p => p.name === name)) {
+          data.pieces.push({ name: name, type: 'Inconnu' });
+        }
+      });
+      
+      // Bonus
+      data.bonuses = {};
+      const bonusMatch = bodyText.match(/(\d+)\s*items?[\s:]*([\s\S]*?)(?=\d+\s*items?|$)/gi);
+      if (bonusMatch) {
+        bonusMatch.forEach(match => {
+          const numMatch = match.match(/(\d+)\s*items?/);
+          if (numMatch) {
+            data.bonuses[`${numMatch[1]}_items`] = match;
           }
         });
-        
-        if (Object.keys(bonuses).length > 0) {
-          data.bonuses[`${numItems}_items`] = bonuses;
-        }
       }
-    });
-    
-    return data;
+      
+      console.log('✅ Panoplie scrapée:', data.name, 'Pièces:', data.pieces.length);
+      return data;
+      
+    } catch (err) {
+      console.error('Erreur scraping panoplie:', err);
+      return null;
+    }
   }
 
-  // Normaliser le nom d'une stat
-  function normalizeStatName(name) {
-    const mapping = {
-      'vitalité': 'vitalite', 'vita': 'vitalite',
-      'sagesse': 'sagesse', 'sag': 'sagesse',
-      'force': 'force', 'for': 'force',
-      'intelligence': 'intelligence', 'int': 'intelligence',
-      'chance': 'chance', 'cha': 'chance',
-      'agilité': 'agilite', 'agi': 'agilite',
-      'pa': 'pa', 'points d\'action': 'pa',
-      'pm': 'pm', 'points de mouvement': 'pm',
-      'po': 'po', 'portée': 'po',
-      'invocations': 'invocations', 'invoc': 'invocations',
-      'initiative': 'initiative', 'init': 'initiative',
-      'prospection': 'prospection', 'pp': 'prospection'
-    };
-    return mapping[name.toLowerCase().trim()] || name.toLowerCase().trim();
-  }
-
-  // Sauvegarder les données scrapées
+  // Sauvegarder
   function saveScrapedData(data) {
-    // Envoyer au background pour stockage
+    // Envoyer au background
     chrome.runtime.sendMessage({
       action: 'saveData',
       data: data
-    });
+    }).catch(err => console.log('Erreur envoi background:', err));
     
-    // Télécharger aussi
+    // Télécharger
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `dofusbook_${data.type}_${data.name?.replace(/\s+/g, '_') || Date.now()}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
 
-  // Créer l'interface de suivi
+  // Interface de progression
   function createProgressUI() {
-    // Supprimer l'ancienne UI si existe
-    const oldUI = document.getElementById('bulk-scraper-ui');
-    if (oldUI) oldUI.remove();
+    const existing = document.getElementById('bulk-scraper-ui');
+    if (existing) existing.remove();
     
     const ui = document.createElement('div');
     ui.id = 'bulk-scraper-ui';
@@ -450,23 +455,27 @@
         transform: translateX(-50%);
         background: linear-gradient(135deg, #e94560 0%, #c73e54 100%);
         color: white;
-        padding: 15px 25px;
+        padding: 20px 30px;
         border-radius: 12px;
         z-index: 999999;
-        font-family: sans-serif;
-        box-shadow: 0 4px 20px rgba(233, 69, 96, 0.4);
-        min-width: 300px;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        box-shadow: 0 8px 30px rgba(233, 69, 96, 0.4);
+        min-width: 350px;
         text-align: center;
       ">
-        <div style="font-weight: bold; margin-bottom: 10px;">🔥 Bulk Detail Scraper</div>
-        <div id="bulk-progress-text">0 / 0 items</div>
+        <div style="font-weight: bold; font-size: 16px; margin-bottom: 10px;">
+          🔥 Bulk Detail Scraper
+        </div>
+        <div id="bulk-progress-text" style="font-size: 14px; margin-bottom: 10px;">
+          0 / ${itemsToScrape.length} items
+        </div>
         <div style="
           width: 100%;
-          height: 6px;
+          height: 8px;
           background: rgba(255,255,255,0.3);
-          border-radius: 3px;
-          margin: 10px 0;
+          border-radius: 4px;
           overflow: hidden;
+          margin: 10px 0;
         ">
           <div id="bulk-progress-bar" style="
             width: 0%;
@@ -475,33 +484,34 @@
             transition: width 0.3s;
           "></div>
         </div>
-        <div id="bulk-status" style="font-size: 12px; opacity: 0.9;">En attente...</div>
+        <div id="bulk-status" style="font-size: 13px; opacity: 0.9; margin-bottom: 10px;">
+          Préparation...
+        </div>
         <button id="bulk-stop-btn" style="
-          margin-top: 10px;
-          padding: 5px 15px;
+          padding: 8px 20px;
           background: rgba(255,255,255,0.2);
           border: 1px solid white;
           color: white;
           border-radius: 6px;
           cursor: pointer;
-        ">Arrêter</button>
+          font-size: 13px;
+        ">⏹️ Arrêter</button>
       </div>
     `;
     
     document.body.appendChild(ui);
     
-    // Event listener pour le bouton stop
     document.getElementById('bulk-stop-btn').addEventListener('click', stopBulkScraping);
   }
 
   // Mettre à jour l'interface
-  function updateProgressUI() {
+  function updateProgressUI(status) {
     const textEl = document.getElementById('bulk-progress-text');
     const barEl = document.getElementById('bulk-progress-bar');
     const statusEl = document.getElementById('bulk-status');
     
     if (textEl) {
-      textEl.textContent = `${currentIndex} / ${itemsToScrape.length} items`;
+      textEl.textContent = `${currentIndex} / ${itemsToScrape.length} items (${scrapedCount} réussis)`;
     }
     
     if (barEl && itemsToScrape.length > 0) {
@@ -509,30 +519,22 @@
       barEl.style.width = `${percent}%`;
     }
     
-    if (statusEl) {
-      if (!isRunning) {
-        statusEl.textContent = '⏹️ Arrêté';
-      } else if (currentIndex >= itemsToScrape.length) {
-        statusEl.textContent = '✅ Terminé !';
-      } else {
-        statusEl.textContent = `🔄 Scraping: ${itemsToScrape[currentIndex]?.name || '...'}`;
-      }
+    if (statusEl && status) {
+      statusEl.textContent = status;
     }
   }
 
-  // Terminer le scraping
+  // Terminer
   function finishBulkScraping() {
     isRunning = false;
-    updateProgressUI();
+    updateProgressUI(`✅ Terminé ! ${scrapedCount}/${itemsToScrape.length} items scrapés`);
     
-    console.log(`✅ Bulk scraping terminé: ${scrapedCount}/${itemsToScrape.length} items scrapés`);
-    showNotification('✅ Terminé !', `${scrapedCount} items scrapés avec succès`);
+    console.log(`✅ Bulk scraping terminé: ${scrapedCount}/${itemsToScrape.length}`);
     
     if (failedItems.length > 0) {
-      console.warn('❌ Items en échec:', failedItems);
+      console.warn('❌ Échecs:', failedItems);
     }
     
-    // Garder l'UI visible quelques secondes puis la cacher
     setTimeout(() => {
       const ui = document.getElementById('bulk-scraper-ui');
       if (ui) {
@@ -543,92 +545,47 @@
     }, 5000);
   }
 
-  // Afficher une notification
-  function showNotification(title, message) {
-    // Créer une notification toast
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-      position: fixed;
-      bottom: 80px;
-      right: 20px;
-      background: #1a1a2e;
-      color: white;
-      padding: 15px 20px;
-      border-radius: 10px;
-      z-index: 999999;
-      font-family: sans-serif;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-      border-left: 4px solid #e94560;
-      max-width: 300px;
-    `;
-    toast.innerHTML = `
-      <div style="font-weight: bold; margin-bottom: 5px;">${title}</div>
-      <div style="font-size: 13px; opacity: 0.9;">${message}</div>
-    `;
-    
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transition = 'opacity 0.3s';
-      setTimeout(() => toast.remove(), 300);
-    }, 3000);
-  }
-
-  // Gérer un enfant scrapé
-  function handleChildScraped(data) {
-    console.log('📥 Enfant a scrapé:', data.name);
-    scrapedCount++;
-    updateProgressUI();
-  }
-
-  // Ajouter un bouton "Bulk Scrape" à l'interface existante
+  // Ajouter un bouton bulk sur les pages liste
   function addBulkButton() {
     if (!isListPage()) return;
+    if (document.getElementById('dofusbook-bulk-btn')) return;
     
-    // Attendre que le bouton flottant existe
-    const checkInterval = setInterval(() => {
-      const floatBtn = document.getElementById('dofusbook-scraper-float');
-      if (floatBtn) {
-        clearInterval(checkInterval);
-        
-        // Créer le bouton bulk
-        const bulkBtn = document.createElement('div');
-        bulkBtn.id = 'dofusbook-bulk-scrape-btn';
-        bulkBtn.innerHTML = '🚀';
-        bulkBtn.title = 'Scraper tous les items en détail';
-        bulkBtn.style.cssText = `
-          position: fixed;
-          bottom: 80px;
-          right: 20px;
-          width: 50px;
-          height: 50px;
-          background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 24px;
-          cursor: pointer;
-          z-index: 999998;
-          box-shadow: 0 4px 15px rgba(74, 222, 128, 0.4);
-          transition: all 0.3s ease;
-        `;
-        
-        bulkBtn.addEventListener('click', () => {
-          startBulkScraping();
-        });
-        
-        document.body.appendChild(bulkBtn);
+    const btn = document.createElement('button');
+    btn.id = 'dofusbook-bulk-btn';
+    btn.innerHTML = '🚀 Scraper tout';
+    btn.style.cssText = `
+      position: fixed;
+      bottom: 100px;
+      right: 20px;
+      background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 25px;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 999998;
+      box-shadow: 0 4px 15px rgba(74, 222, 128, 0.4);
+      font-family: sans-serif;
+      font-size: 14px;
+    `;
+    
+    btn.addEventListener('click', () => {
+      if (confirm(`🚀 Scraper tous les items de cette page en détail ?\n\nCela ouvrira ${extractItemsFromPage().length} onglets un par un.`)) {
+        startBulkScraping();
       }
-    }, 500);
+    });
+    
+    document.body.appendChild(btn);
+    console.log('✅ Bouton bulk ajouté');
   }
 
   // Initialiser
   if (isListPage()) {
-    addBulkButton();
+    console.log('📄 Page liste détectée - Ajout du bouton bulk');
+    setTimeout(addBulkButton, 1000);
   }
 
-  console.log('🔥 Bulk Detail Scraper prêt');
+  console.log('🔥 Bulk Detail Scraper v2.0 prêt');
 
 })();
